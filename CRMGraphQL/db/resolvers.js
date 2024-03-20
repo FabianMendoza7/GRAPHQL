@@ -103,6 +103,34 @@ const resolvers = {
 
             // Retornar el resultado.
             return pedido;
+        },
+        obtenerPedidosEstado: async (_, { estado }, ctx) => {
+            const pedidos = await Pedido.find({vendedor: ctx.usuario.id, estado});
+            return pedidos;
+        },
+        mejoresClientes: async () => {
+            const clientes = await Pedido.aggregate([
+                { $match: { estado: "COMPLETADO" } },
+                { $group: {
+                    _id: "$cliente",
+                    total: { $sum: '$total' }
+                }},
+                {
+                    $lookup: {
+                        from: 'clientes',
+                        localField: '_id',
+                        foreignField: '_id',
+                        as: 'cliente'
+                    }
+                },
+                {
+                    $sort: {
+                        total: -1
+                    }
+                }
+            ]);
+
+            return clientes;
         }
     },
     Mutation: {
@@ -333,6 +361,24 @@ const resolvers = {
             const resultado = await Pedido.findOneAndUpdate({ _id: id }, input, { new: true });
 
             return resultado;
+        },
+        eliminarPedido: async (_, { id }, ctx) => {
+            // Verificar si el pedido existe.
+            const pedido = await Pedido.findById(id);
+
+            if(!pedido){
+                throw new Error("El pedido no existe");
+            }
+
+            // Verificar sie el vendedor es quien lo borra.
+            if(pedido.vendedor.toString() !== ctx.usuario.id){
+                throw new Error("No tienes las credenciales");
+            }
+
+            // Eliminar de la base de datos.
+            await Pedido.findOneAndDelete({_id: id});
+
+            return "Pedido eliminado";
         }
     }
 };
